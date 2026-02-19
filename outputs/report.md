@@ -1,8 +1,58 @@
-# Wald / Score / LR シミュレーションレポート
+﻿# Wald / Score / LR シミュレーションレポート
 
 - alpha: 0.05
 - total rows: 302720
 - CI方針: df=1 のとき、各検定のχ²近似を反転した区間を表示 (Score/LR は局所二次近似)。
+
+## このレポートの読み方（追記）
+
+- 各シナリオは「データ生成モデル（真の世界）」を固定し、その上で `H0` を Wald / Score / LR で検定しています。
+- `Summary` の `size` は、帰無が真のときの棄却率（目標 0.05）です。ここが 0.05 からずれるほど、検定の校正が崩れています。
+- `Inverted CI Summary` は、検定反転で作った区間の品質です。`coverage`（目標 0.95）、`left_miss_rate`、`right_miss_rate`、`ci_invalid_rate` を見ます。
+- `left_miss_rate` と `right_miss_rate` が大きく違う場合は、区間の左右非対称な崩れ（片側で外れやすい）を示唆します。
+- 本資料の狙いは、正則条件での漸近一致だけでなく、有限標本・境界・分離・弱識別・ミススペック・過学習で、どの検定がどのように壊れるかを比較する点です。
+## シナリオ別モデル定義（数式）
+
+1. `normal_mean_known_sigma`  
+   \(X_i \sim \mathcal{N}(\mu,\sigma^2)\)（\(\sigma^2\)既知）、検定は \(H_0:\mu=0\)。
+2. `linear_regression_single_constraint`  
+   \(y_i=\beta_0+\beta_1x_{1i}+\beta_2x_{2i}+\beta_3x_{3i}+\varepsilon_i,\ \varepsilon_i\sim\mathcal{N}(0,\sigma^2)\)、検定は \(H_0:\beta_1=0\)。
+3. `linear_regression_multiple_constraints`  
+   上と同じ線形回帰で、検定は \(H_0:(\beta_1,\beta_2)=(0,0)\)。
+4. `logistic_separation`  
+   \(x_i\in\{0,1\},\ y_i\sim\mathrm{Bernoulli}(p_i),\ \mathrm{logit}(p_i)=\beta_0+\beta_1x_i\)。
+   効果が強いときに \(y_i=x_i\) に近いデータを混ぜ、分離を再現。
+5. `logistic_small_sample`  
+   \(x_i\sim\mathcal{N}(0,1),\ \mathrm{logit}(p_i)=-0.3+\beta_1x_i,\ y_i\sim\mathrm{Bernoulli}(p_i)\) を小標本 \(n\) で評価。
+6. `wald_runtime_batch`  
+   \(y=X\beta+\varepsilon,\ \varepsilon\sim\mathcal{N}(0,1),\ X=[\mathbf{1},x_1,\dots,x_p]\)。
+   複数仮説 \(H_{0j}:\beta_j=0\ (j=1,\dots,10)\) を同一 full fit から検定。
+7. `zip_boundary`  
+   \(Y_i\sim\mathrm{ZIP}(\pi,\lambda)\),
+   \(P(Y_i=0)=\pi+(1-\pi)e^{-\lambda}\),
+   \(P(Y_i=k\ge1)=(1-\pi)e^{-\lambda}\lambda^k/k!\)。
+   検定は境界帰無 \(H_0:\pi=0\)。
+8. `collinearity`  
+   \(x_{2i}=x_{1i}+\nu_i,\ \nu_i\sim\mathcal{N}(0,\tau^2),\ \tau^2\ll1\) として強い共線性を作り、
+   \(y_i=\beta_0+\beta_1x_{1i}+\beta_2x_{2i}+\beta_3x_{3i}+\varepsilon_i\) で \(H_0:\beta_1=0\) を検定。
+9. `poisson_misspec`  
+   真の生成は過分散付き（NegBin）: \(Y_i\sim\mathrm{NegBin}(\mu_i,\alpha)\), \(\mu_i=e^{\beta_0+\beta_1x_i}\)。
+   ただし当てるモデルは Poisson: \(Y_i\sim\mathrm{Poisson}(\mu_i)\)。検定は \(H_0:\beta_1=0\)。
+10. `invariance_demo`  
+    ロジスティック回帰 \(\mathrm{logit}(p_i)=\beta_0+\beta_1x_i\) で、
+    同値な帰無 \(H_0:\beta_1=0\) と \(H_0:\mathrm{OR}=e^{\beta_1}=1\) を比較。
+11. `phacking_stepwise`  
+    \(y_i=\varepsilon_i+\delta x_{i1},\ \varepsilon_i\sim\mathcal{N}(0,1),\ x_{ij}\sim\mathcal{N}(0,1)\)。
+    相関最大の変数を選択後、同一データまたは分割データで \(H_0:\beta_{\text{selected}}=0\) を検定。
+12. `linear_regression_heteroskedastic`  
+    \(y_i=\beta_0+\beta_1x_{1i}+\beta_2x_{2i}+\varepsilon_i\),
+    \(\mathrm{Var}(\varepsilon_i\mid x_{1i})=1+\gamma x_{1i}^2\)。検定は \(H_0:\beta_1=0\)。
+13. `logistic_clustered`  
+    クラスタ効果付きロジット: \(\mathrm{logit}(p_{ig})=\beta_0+\beta_1x_{ig}+b_g,\ b_g\sim\mathcal{N}(0,\sigma_b^2)\),
+    \(y_{ig}\sim\mathrm{Bernoulli}(p_{ig})\)。検定は \(H_0:\beta_1=0\)。
+14. `logistic_local_alternatives`  
+    \(\mathrm{logit}(p_i)=\beta_0+\beta_1x_i\) で \(\beta_1=c/\sqrt{n}\)（`effect_list` は \(c\)）。
+    検定は \(H_0:\beta_1=0\)。
 
 ## Regular: Normal mean (sigma known)
 
@@ -245,6 +295,26 @@ n の増加に伴い 3 検定が近づくか、どの条件で差が拡大する
 
 複数仮説を同一 full fit で処理できるため、Wald の実務上の速度優位を確認するシナリオです。
 
+### Wald batch size が 0.05 を超える理由（追記）
+
+**今回の実測（このレポート）**
+- `size`: `wald=0.077`, `score=0.072`, `lr=0.074`（いずれも目標 `0.05` より大きい）
+
+**主な原因**
+- この章は「多数の係数を同一 full model から一括検定」する設定です。
+- 実装上、OLS の誤差分散推定が `SSE/n`（MLE型）寄りになっているため、有限標本では `SSE/(n-p)` より小さくなりやすく、標準誤差が過小評価されます。
+- 標準誤差が小さくなると Wald/Score/LR の検定統計量が過大になり、棄却率（size）が上振れします。
+- さらに有限標本で χ² 漸近近似をそのまま使うと、上振れが残りやすくなります。
+
+**対策**
+1. OLS 分散を `SSE/(n-p)` にし、単一係数は `t` 検定（または `F(1, n-p)`）で校正する。
+2. 多数仮説を同時に判断する場合は、`Holm` または `BH(FDR)` を適用する。
+3. 近似誤差が気になる場合は、パラメトリック・ブートストラップで臨界値/`p` 値を校正する。
+
+**なぜこの対策で改善するか**
+- `SSE/(n-p)` と `t/F` は有限標本の自由度を反映するため、過小SEに起因する過剰棄却を抑え、size を 0.05 に近づけます。
+- Holm/BH は多重比較時のエラー率（FWER/FDR）を理論的に制御するため、「たくさん検定した結果としての偽陽性増加」を抑えられます。
+- ブートストラップは漸近分布ではなく経験分布で校正するため、有限標本の歪みを直接補正できます。
 ### Figures
 
 - ![pvalue_hist.png](wald_runtime_batch/pvalue_hist.png)
@@ -588,3 +658,7 @@ n の増加に伴い 3 検定が近づくか、どの条件で差が拡大する
 - ![power_curves.png](logistic_local_alternatives/power_curves.png)
 - ![failure_rate_vs_n.png](logistic_local_alternatives/failure_rate_vs_n.png)
 - ![runtime_vs_n.png](logistic_local_alternatives/runtime_vs_n.png)
+
+
+
+
