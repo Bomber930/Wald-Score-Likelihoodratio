@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any
 
@@ -58,7 +58,20 @@ class PHackingScenario(Scenario):
         return {"hypothesis": text, "target": "selected_linear_slope", "df": 1}
 
     def notes(self) -> str:
-        return "変数選択後に同データで検定すると偽陽性率が増える。探索/検定分離でサイズが回復する。"
+        return (
+            "Variable selection and testing on the same sample inflates false positives. "
+            "Sample splitting reduces this bias at the cost of power."
+        )
+
+    def true_parameter_value(
+        self,
+        n: int,
+        effect_size: float,
+        hypothesis_id: str = "main",
+    ) -> float:
+        if abs(float(effect_size)) <= 1e-12:
+            return 0.0
+        return np.nan
 
     def select_feature_index(self, X: np.ndarray, y: np.ndarray) -> int:
         y_centered = y - np.mean(y)
@@ -119,20 +132,56 @@ class PHackingScenario(Scenario):
             self.restriction(full_same.params if full_same.params is not None else np.array([0.0, 0.0])),
             self.restriction_jacobian(np.array([0.0, 0.0] if full_same.params is None else full_same.params)),
             df=1,
+            alpha=alpha,
         )
         if np.isfinite(full_same.runtime_ms):
             wald_same.runtime_ms = float(wald_same.runtime_ms + full_same.runtime_ms)
-        score_res_same = run_score_test(full_same, null_same, score_same)
+        score_res_same = run_score_test(full_same, null_same, score_same, alpha=alpha)
         if np.isfinite(null_same.runtime_ms):
             score_res_same.runtime_ms = float(score_res_same.runtime_ms + null_same.runtime_ms)
-        lr_same = run_lr_test(full_same, null_same, df=1)
+        theta_hat_same = float(full_same.params[1]) if full_same.params is not None else np.nan
+        lr_same = run_lr_test(full_same, null_same, df=1, theta_hat=theta_hat_same, alpha=alpha)
         if np.isfinite(full_same.runtime_ms):
             lr_same.runtime_ms = float(lr_same.runtime_ms + full_same.runtime_ms)
         if np.isfinite(null_same.runtime_ms):
             lr_same.runtime_ms = float(lr_same.runtime_ms + null_same.runtime_ms)
-        rows.append(self._result_to_row(wald_same, "same_data", n, effect_size, rep, seed, alpha))
-        rows.append(self._result_to_row(score_res_same, "same_data", n, effect_size, rep, seed, alpha))
-        rows.append(self._result_to_row(lr_same, "same_data", n, effect_size, rep, seed, alpha))
+        theta_true_same = self.true_parameter_value(n=n, effect_size=effect_size, hypothesis_id="same_data")
+        rows.append(
+            self._result_to_row(
+                wald_same,
+                "same_data",
+                n,
+                effect_size,
+                rep,
+                seed,
+                alpha,
+                theta_true=theta_true_same,
+            )
+        )
+        rows.append(
+            self._result_to_row(
+                score_res_same,
+                "same_data",
+                n,
+                effect_size,
+                rep,
+                seed,
+                alpha,
+                theta_true=theta_true_same,
+            )
+        )
+        rows.append(
+            self._result_to_row(
+                lr_same,
+                "same_data",
+                n,
+                effect_size,
+                rep,
+                seed,
+                alpha,
+                theta_true=theta_true_same,
+            )
+        )
 
         rng = make_rng(seed + 777_777)
         perm = rng.permutation(n)
@@ -152,18 +201,54 @@ class PHackingScenario(Scenario):
             self.restriction(full_split.params if full_split.params is not None else np.array([0.0, 0.0])),
             self.restriction_jacobian(np.array([0.0, 0.0] if full_split.params is None else full_split.params)),
             df=1,
+            alpha=alpha,
         )
         if np.isfinite(full_split.runtime_ms):
             wald_split.runtime_ms = float(wald_split.runtime_ms + full_split.runtime_ms)
-        score_res_split = run_score_test(full_split, null_split, score_split)
+        score_res_split = run_score_test(full_split, null_split, score_split, alpha=alpha)
         if np.isfinite(null_split.runtime_ms):
             score_res_split.runtime_ms = float(score_res_split.runtime_ms + null_split.runtime_ms)
-        lr_split = run_lr_test(full_split, null_split, df=1)
+        theta_hat_split = float(full_split.params[1]) if full_split.params is not None else np.nan
+        lr_split = run_lr_test(full_split, null_split, df=1, theta_hat=theta_hat_split, alpha=alpha)
         if np.isfinite(full_split.runtime_ms):
             lr_split.runtime_ms = float(lr_split.runtime_ms + full_split.runtime_ms)
         if np.isfinite(null_split.runtime_ms):
             lr_split.runtime_ms = float(lr_split.runtime_ms + null_split.runtime_ms)
-        rows.append(self._result_to_row(wald_split, "split_data", n, effect_size, rep, seed, alpha))
-        rows.append(self._result_to_row(score_res_split, "split_data", n, effect_size, rep, seed, alpha))
-        rows.append(self._result_to_row(lr_split, "split_data", n, effect_size, rep, seed, alpha))
+        theta_true_split = self.true_parameter_value(n=n, effect_size=effect_size, hypothesis_id="split_data")
+        rows.append(
+            self._result_to_row(
+                wald_split,
+                "split_data",
+                n,
+                effect_size,
+                rep,
+                seed,
+                alpha,
+                theta_true=theta_true_split,
+            )
+        )
+        rows.append(
+            self._result_to_row(
+                score_res_split,
+                "split_data",
+                n,
+                effect_size,
+                rep,
+                seed,
+                alpha,
+                theta_true=theta_true_split,
+            )
+        )
+        rows.append(
+            self._result_to_row(
+                lr_split,
+                "split_data",
+                n,
+                effect_size,
+                rep,
+                seed,
+                alpha,
+                theta_true=theta_true_split,
+            )
+        )
         return rows

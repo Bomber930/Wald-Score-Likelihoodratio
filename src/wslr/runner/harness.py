@@ -72,6 +72,10 @@ def make_runner_failure_row(
         "converged_full": False,
         "converged_null": False,
         "error_type": f"runner_failed:{type(exc).__name__}:{exc}",
+        "theta_hat": np.nan,
+        "ci_lower": np.nan,
+        "ci_upper": np.nan,
+        "ci_method": None,
         "failed": True,
         "reject": False,
         "scenario": scenario.name,
@@ -84,6 +88,7 @@ def make_runner_failure_row(
         "alpha": float(alpha),
         "null_spec": "",
         "null_df": np.nan,
+        "theta_true": np.nan,
         "notes": scenario.notes(),
     }
 

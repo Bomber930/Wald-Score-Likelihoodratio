@@ -59,12 +59,21 @@ class Scenario(ABC):
     def notes(self) -> str:
         raise NotImplementedError
 
+    def true_parameter_value(
+        self,
+        n: int,
+        effect_size: float,
+        hypothesis_id: str = "main",
+    ) -> float:
+        return float(effect_size)
+
     def extra_tests(
         self,
         data: dict[str, Any],
         full_fit: ModelFit,
         null_fit: ModelFit,
         hypothesis_id: str = "main",
+        alpha: float = 0.05,
     ) -> list[TestResult]:
         return []
 
@@ -82,6 +91,7 @@ class Scenario(ABC):
             full_fit = self.fit_full(data, hypothesis_id=hypothesis_id)
             null_fit = self.fit_null(data, hypothesis_id=hypothesis_id)
             df = int(self.null_spec(hypothesis_id).get("df", 1))
+            theta_true = self.true_parameter_value(n=n, effect_size=effect_size, hypothesis_id=hypothesis_id)
             test_names = self.test_suite(hypothesis_id)
             if "wald" in test_names:
                 restriction = None
@@ -89,7 +99,7 @@ class Scenario(ABC):
                 if full_fit.params is not None:
                     restriction = self.restriction(full_fit.params, hypothesis_id=hypothesis_id)
                     jacobian = self.restriction_jacobian(full_fit.params, hypothesis_id=hypothesis_id)
-                wald = run_wald_test(full_fit, null_fit, restriction, jacobian, df=df)
+                wald = run_wald_test(full_fit, null_fit, restriction, jacobian, df=df, alpha=alpha)
                 if np.isfinite(full_fit.runtime_ms):
                     wald.runtime_ms = float(wald.runtime_ms + full_fit.runtime_ms)
                 rows.append(
@@ -101,11 +111,12 @@ class Scenario(ABC):
                         rep=rep,
                         seed=seed,
                         alpha=alpha,
+                        theta_true=theta_true,
                     )
                 )
             if "score" in test_names:
                 bundle = self.score_components(data, null_fit, hypothesis_id=hypothesis_id)
-                score = run_score_test(full_fit, null_fit, bundle)
+                score = run_score_test(full_fit, null_fit, bundle, alpha=alpha)
                 if np.isfinite(null_fit.runtime_ms):
                     score.runtime_ms = float(score.runtime_ms + null_fit.runtime_ms)
                 rows.append(
@@ -117,10 +128,19 @@ class Scenario(ABC):
                         rep=rep,
                         seed=seed,
                         alpha=alpha,
+                        theta_true=theta_true,
                     )
                 )
             if "lr" in test_names:
-                lr = run_lr_test(full_fit, null_fit, df=df)
+                theta_hat_lr = np.nan
+                if full_fit.params is not None and df == 1:
+                    try:
+                        r_full = np.asarray(self.restriction(full_fit.params, hypothesis_id=hypothesis_id), dtype=float).reshape(-1)
+                        if r_full.size == 1:
+                            theta_hat_lr = float(r_full[0])
+                    except Exception:
+                        theta_hat_lr = np.nan
+                lr = run_lr_test(full_fit, null_fit, df=df, theta_hat=theta_hat_lr, alpha=alpha)
                 if np.isfinite(full_fit.runtime_ms):
                     lr.runtime_ms = float(lr.runtime_ms + full_fit.runtime_ms)
                 if np.isfinite(null_fit.runtime_ms):
@@ -134,9 +154,16 @@ class Scenario(ABC):
                         rep=rep,
                         seed=seed,
                         alpha=alpha,
+                        theta_true=theta_true,
                     )
                 )
-            extra = self.extra_tests(data, full_fit, null_fit, hypothesis_id=hypothesis_id)
+            extra = self.extra_tests(
+                data,
+                full_fit,
+                null_fit,
+                hypothesis_id=hypothesis_id,
+                alpha=alpha,
+            )
             for item in extra:
                 rows.append(
                     self._result_to_row(
@@ -147,6 +174,7 @@ class Scenario(ABC):
                         rep=rep,
                         seed=seed,
                         alpha=alpha,
+                        theta_true=theta_true,
                     )
                 )
         return rows
@@ -160,6 +188,7 @@ class Scenario(ABC):
         rep: int,
         seed: int,
         alpha: float,
+        theta_true: float = np.nan,
     ) -> dict[str, Any]:
         record = result.to_record()
         pvalue = record["pvalue"]
@@ -175,5 +204,6 @@ class Scenario(ABC):
         record["alpha"] = float(alpha)
         record["null_spec"] = self.null_spec(hypothesis_id).get("hypothesis", "")
         record["null_df"] = int(self.null_spec(hypothesis_id).get("df", 1))
+        record["theta_true"] = float(theta_true) if np.isfinite(theta_true) else np.nan
         record["notes"] = self.notes()
         return record

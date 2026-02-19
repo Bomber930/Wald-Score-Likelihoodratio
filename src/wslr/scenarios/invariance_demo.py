@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any
 
@@ -79,5 +79,19 @@ class InvarianceDemoScenario(Scenario):
             return {"hypothesis": "H0: OR = 1", "target": "odds_ratio", "df": 1}
         return {"hypothesis": "H0: beta_1 = 0", "target": "logit_slope", "df": 1}
 
+    def true_parameter_value(
+        self,
+        n: int,
+        effect_size: float,
+        hypothesis_id: str = "main",
+    ) -> float:
+        beta_true = float(effect_size)
+        if hypothesis_id == "or":
+            return float(np.exp(beta_true) - 1.0)
+        return beta_true
+
     def notes(self) -> str:
-        return "同値仮説でもWaldはパラメータ化依存でズレ得る。LRは同じfull/null比較なので相対的に不変。"
+        return (
+            "Wald can differ across equivalent parameterizations (beta vs OR), while LR is comparatively "
+            "stable to reparameterization because it compares likelihood values."
+        )

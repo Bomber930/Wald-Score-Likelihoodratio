@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any
 
@@ -80,8 +80,23 @@ class WaldRuntimeBatchScenario(Scenario):
         idx = self._index_from_hypothesis(hypothesis_id)
         return {"hypothesis": f"H0: beta_{idx} = 0", "target": "linear_coefficient", "df": 1}
 
+    def true_parameter_value(
+        self,
+        n: int,
+        effect_size: float,
+        hypothesis_id: str = "main",
+    ) -> float:
+        idx = self._index_from_hypothesis(hypothesis_id)
+        n_signal = min(5, self.p_features)
+        if idx <= n_signal:
+            return float(effect_size)
+        return 0.0
+
     def notes(self) -> str:
-        return "多数係数を順次検定する実務想定。1回のfull推定を再利用できるWaldはLR/Scoreより高速になりやすい。"
+        return (
+            "When many hypotheses are tested from one shared full fit, Wald can be much faster than "
+            "re-fitting null models for LR/Score."
+        )
 
     def run_replication(
         self,
@@ -106,12 +121,13 @@ class WaldRuntimeBatchScenario(Scenario):
         )
         for hypothesis_id in self.hypothesis_ids():
             df = 1
+            theta_true = self.true_parameter_value(n=n, effect_size=effect_size, hypothesis_id=hypothesis_id)
             if full_fit.params is None:
-                wald = run_wald_test(full_fit, null_stub, None, None, df=df)
+                wald = run_wald_test(full_fit, null_stub, None, None, df=df, alpha=alpha)
             else:
                 restriction = self.restriction(full_fit.params, hypothesis_id=hypothesis_id)
                 jacobian = self.restriction_jacobian(full_fit.params, hypothesis_id=hypothesis_id)
-                wald = run_wald_test(full_fit, null_stub, restriction, jacobian, df=df)
+                wald = run_wald_test(full_fit, null_stub, restriction, jacobian, df=df, alpha=alpha)
             wald.runtime_ms = float(wald.runtime_ms + wald_full_share)
             rows.append(
                 self._result_to_row(
@@ -122,14 +138,18 @@ class WaldRuntimeBatchScenario(Scenario):
                     rep=rep,
                     seed=seed,
                     alpha=alpha,
+                    theta_true=theta_true,
                 )
             )
             null_fit = self.fit_null(data, hypothesis_id=hypothesis_id)
             score_bundle = self.score_components(data, null_fit, hypothesis_id=hypothesis_id)
-            score = run_score_test(full_fit, null_fit, score_bundle)
+            score = run_score_test(full_fit, null_fit, score_bundle, alpha=alpha)
             if np.isfinite(null_fit.runtime_ms):
                 score.runtime_ms = float(score.runtime_ms + null_fit.runtime_ms)
-            lr = run_lr_test(full_fit, null_fit, df=df)
+            theta_hat = np.nan
+            if full_fit.params is not None:
+                theta_hat = float(self.restriction(full_fit.params, hypothesis_id=hypothesis_id)[0])
+            lr = run_lr_test(full_fit, null_fit, df=df, theta_hat=theta_hat, alpha=alpha)
             if np.isfinite(null_fit.runtime_ms):
                 lr.runtime_ms = float(lr.runtime_ms + null_fit.runtime_ms)
             lr.runtime_ms = float(lr.runtime_ms + wald_full_share)
@@ -142,6 +162,7 @@ class WaldRuntimeBatchScenario(Scenario):
                     rep=rep,
                     seed=seed,
                     alpha=alpha,
+                    theta_true=theta_true,
                 )
             )
             rows.append(
@@ -153,6 +174,7 @@ class WaldRuntimeBatchScenario(Scenario):
                     rep=rep,
                     seed=seed,
                     alpha=alpha,
+                    theta_true=theta_true,
                 )
             )
         return rows

@@ -53,3 +53,8 @@ python scripts/run_all.py --n-list 40,80,160 --effect-list 0,0.2,0.5
 - 収束失敗・分散計算失敗・行列特異・NaNは例外で落とさず `failed/error_type` として記録
 - 検定結果は統一フォーマットで保存:
   - `df`, `pvalue`, `stat`, `runtime_ms`, `converged_full`, `converged_null`, `error_type`
+
+## Added Scenarios
+- `linear_regression_heteroskedastic`: 不均一分散下で通常Wald/Score/LRと`wald_hc3`（robust Wald）を比較。
+- `logistic_clustered`: クラスタ依存データで独立仮定の3検定と`wald_cluster`（cluster-robust Wald）を比較。
+- `logistic_local_alternatives`: `beta_1=c/sqrt(n)` の局所対立でサイズ・パワーの漸近挙動を比較。

@@ -1,0 +1,11 @@
+scenario_slug,test,rows,size,failure_rate
+logistic_separation,lr,80,0.15,0.0
+logistic_separation,score,80,0.15,0.0
+logistic_separation,wald,80,0.15,0.0
+normal_mean_known_sigma,lr,80,0.025,0.0
+normal_mean_known_sigma,score,80,0.025,0.0
+normal_mean_known_sigma,wald,80,0.025,0.0
+zip_boundary,lr,80,0.0,0.0
+zip_boundary,lr_bootstrap,80,0.0,0.0
+zip_boundary,score,80,0.125,0.0
+zip_boundary,wald,80,0.0,0.0

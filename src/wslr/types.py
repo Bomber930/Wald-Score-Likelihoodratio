@@ -35,6 +35,10 @@ class TestResult:
     converged_full: bool = False
     converged_null: bool = False
     error_type: str | None = None
+    theta_hat: float = np.nan
+    ci_lower: float = np.nan
+    ci_upper: float = np.nan
+    ci_method: str | None = None
 
     def failed(self) -> bool:
         if self.error_type is not None:
@@ -55,5 +59,9 @@ class TestResult:
             "converged_full": bool(self.converged_full),
             "converged_null": bool(self.converged_null),
             "error_type": self.error_type,
+            "theta_hat": float(self.theta_hat) if np.isfinite(self.theta_hat) else np.nan,
+            "ci_lower": float(self.ci_lower) if np.isfinite(self.ci_lower) else np.nan,
+            "ci_upper": float(self.ci_upper) if np.isfinite(self.ci_upper) else np.nan,
+            "ci_method": self.ci_method,
             "failed": bool(self.failed()),
         }

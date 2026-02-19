@@ -3,7 +3,10 @@ from __future__ import annotations
 from .base import Scenario
 from .collinearity import CollinearityScenario
 from .invariance_demo import InvarianceDemoScenario
+from .linear_regression_heteroskedastic import LinearRegressionHeteroskedasticScenario
 from .linear_regression import LinearRegressionScenario
+from .logistic_clustered import LogisticClusteredScenario
+from .logistic_local_alternatives import LogisticLocalAlternativesScenario
 from .logistic_separation import LogisticSeparationScenario
 from .logistic_small_sample import LogisticSmallSampleScenario
 from .normal_mean_known_sigma import NormalMeanKnownSigmaScenario
@@ -26,6 +29,9 @@ def get_all_scenarios() -> list[Scenario]:
         PoissonMisspecScenario(),
         InvarianceDemoScenario(),
         PHackingScenario(),
+        LinearRegressionHeteroskedasticScenario(),
+        LogisticClusteredScenario(),
+        LogisticLocalAlternativesScenario(),
     ]
 
 
@@ -41,5 +47,8 @@ __all__ = [
     "PoissonMisspecScenario",
     "InvarianceDemoScenario",
     "PHackingScenario",
+    "LinearRegressionHeteroskedasticScenario",
+    "LogisticClusteredScenario",
+    "LogisticLocalAlternativesScenario",
     "get_all_scenarios",
 ]

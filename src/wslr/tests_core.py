@@ -9,6 +9,25 @@ from .types import ModelFit, ScoreBundle, TestResult
 from .utils import coalesce_errors, safe_inverse, safe_quadform
 
 
+def chi2_critical_root(alpha: float) -> float:
+    q = float(chi2.ppf(1.0 - alpha, 1))
+    if not np.isfinite(q) or q < 0.0:
+        return np.nan
+    return float(np.sqrt(q))
+
+
+def symmetric_ci_from_se(theta_hat: float, se: float, alpha: float) -> tuple[float, float]:
+    if not np.isfinite(theta_hat):
+        return np.nan, np.nan
+    if not np.isfinite(se) or se < 0.0:
+        return np.nan, np.nan
+    crit = chi2_critical_root(alpha)
+    if not np.isfinite(crit):
+        return np.nan, np.nan
+    half = crit * se
+    return float(theta_hat - half), float(theta_hat + half)
+
+
 def build_failed_result(
     test: str,
     df: int,
@@ -35,6 +54,7 @@ def run_wald_test(
     restriction: np.ndarray | None,
     jacobian: np.ndarray | None,
     df: int,
+    alpha: float = 0.05,
 ) -> TestResult:
     start = perf_counter()
     base_error = coalesce_errors([full_fit.error_type, null_fit.error_type])
@@ -138,6 +158,18 @@ def run_wald_test(
             converged_null=null_fit.converged,
             error_type="non_finite_pvalue",
         )
+    theta_hat = np.nan
+    ci_lower = np.nan
+    ci_upper = np.nan
+    ci_method = None
+    if df == 1 and r.size == 1 and middle.shape == (1, 1):
+        theta_hat = float(r[0, 0])
+        var_hat = float(middle[0, 0])
+        if np.isfinite(var_hat) and var_hat >= 0.0:
+            se_hat = float(np.sqrt(var_hat))
+            ci_lower, ci_upper = symmetric_ci_from_se(theta_hat, se_hat, alpha=alpha)
+            if np.isfinite(ci_lower) and np.isfinite(ci_upper):
+                ci_method = "inverted_wald_chi2"
     return TestResult(
         test="wald",
         stat=stat,
@@ -147,10 +179,19 @@ def run_wald_test(
         converged_full=full_fit.converged,
         converged_null=null_fit.converged,
         error_type=None,
+        theta_hat=theta_hat,
+        ci_lower=ci_lower,
+        ci_upper=ci_upper,
+        ci_method=ci_method,
     )
 
 
-def run_score_test(full_fit: ModelFit, null_fit: ModelFit, bundle: ScoreBundle) -> TestResult:
+def run_score_test(
+    full_fit: ModelFit,
+    null_fit: ModelFit,
+    bundle: ScoreBundle,
+    alpha: float = 0.05,
+) -> TestResult:
     start = perf_counter()
     df = int(bundle.df)
     base_error = coalesce_errors([null_fit.error_type, bundle.error_type])
@@ -209,6 +250,19 @@ def run_score_test(full_fit: ModelFit, null_fit: ModelFit, bundle: ScoreBundle) 
             converged_null=null_fit.converged,
             error_type="non_finite_pvalue",
         )
+    theta_hat = np.nan
+    ci_lower = np.nan
+    ci_upper = np.nan
+    ci_method = None
+    if df == 1 and score.size == 1 and info.shape == (1, 1):
+        u_val = float(score[0, 0])
+        i_val = float(info[0, 0])
+        if np.isfinite(u_val) and np.isfinite(i_val) and i_val > 0.0:
+            theta_hat = float(u_val / i_val)
+            se_hat = float(np.sqrt(1.0 / i_val))
+            ci_lower, ci_upper = symmetric_ci_from_se(theta_hat, se_hat, alpha=alpha)
+            if np.isfinite(ci_lower) and np.isfinite(ci_upper):
+                ci_method = "inverted_score_chi2_linearized"
     return TestResult(
         test="score",
         stat=stat,
@@ -218,10 +272,20 @@ def run_score_test(full_fit: ModelFit, null_fit: ModelFit, bundle: ScoreBundle) 
         converged_full=full_fit.converged,
         converged_null=null_fit.converged,
         error_type=None,
+        theta_hat=theta_hat,
+        ci_lower=ci_lower,
+        ci_upper=ci_upper,
+        ci_method=ci_method,
     )
 
 
-def run_lr_test(full_fit: ModelFit, null_fit: ModelFit, df: int) -> TestResult:
+def run_lr_test(
+    full_fit: ModelFit,
+    null_fit: ModelFit,
+    df: int,
+    theta_hat: float = np.nan,
+    alpha: float = 0.05,
+) -> TestResult:
     start = perf_counter()
     base_error = coalesce_errors([full_fit.error_type, null_fit.error_type])
     if base_error:
@@ -279,6 +343,19 @@ def run_lr_test(full_fit: ModelFit, null_fit: ModelFit, df: int) -> TestResult:
             converged_null=null_fit.converged,
             error_type="non_finite_pvalue",
         )
+    theta_val = float(theta_hat) if np.isfinite(theta_hat) else np.nan
+    ci_lower = np.nan
+    ci_upper = np.nan
+    ci_method = None
+    if df == 1 and np.isfinite(theta_val):
+        se_hat = np.nan
+        if stat > 0.0:
+            se_hat = float(abs(theta_val) / np.sqrt(stat))
+        elif stat == 0.0 and abs(theta_val) <= 1e-12:
+            se_hat = 0.0
+        ci_lower, ci_upper = symmetric_ci_from_se(theta_val, se_hat, alpha=alpha)
+        if np.isfinite(ci_lower) and np.isfinite(ci_upper):
+            ci_method = "inverted_lr_chi2_quadratic"
     return TestResult(
         test="lr",
         stat=stat,
@@ -288,4 +365,8 @@ def run_lr_test(full_fit: ModelFit, null_fit: ModelFit, df: int) -> TestResult:
         converged_full=full_fit.converged,
         converged_null=null_fit.converged,
         error_type=None,
+        theta_hat=theta_val,
+        ci_lower=ci_lower,
+        ci_upper=ci_upper,
+        ci_method=ci_method,
     )

@@ -214,6 +214,7 @@ class ZIPBoundaryScenario(Scenario):
         full_fit: ModelFit,
         null_fit: ModelFit,
         hypothesis_id: str = "main",
+        alpha: float = 0.05,
     ) -> list[TestResult]:
         start = perf_counter()
         if full_fit.loglike is None or null_fit.loglike is None:
