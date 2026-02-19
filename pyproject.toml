@@ -1,0 +1,16 @@
+[project]
+name = "wslr-simulation-lab"
+version = "0.1.0"
+description = "Educational simulation package for Wald, Score, and LR tests."
+requires-python = ">=3.11"
+dependencies = [
+  "numpy",
+  "scipy",
+  "pandas",
+  "statsmodels",
+  "matplotlib",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
